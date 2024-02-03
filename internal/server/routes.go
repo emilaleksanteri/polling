@@ -2,8 +2,10 @@ package server
 
 import (
 	"encoding/json"
+	"fmt"
 	"log"
 	"net/http"
+	"time"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
@@ -14,18 +16,21 @@ func (s *Server) RegisterRoutes() http.Handler {
 	r.Use(middleware.Logger)
 
 	r.Get("/", s.HelloWorldHandler)
-	r.Post("/log", s.SendLogHandler)
-	r.Get("/logs", s.GetLogsHandler)
+	r.Post("/log/{channel}", s.SendLogHandler)
+	r.Get("/logs/{channel}", s.GetLogsHandler)
 
 	return r
 }
 
-type Child struct {
-	Name string `json:"name"`
+type Log struct {
+	Domain     string    `json:"domain" redis:"domain"`
+	RequestAt  time.Time `json:"request_at" redis:"request_at"`
+	IsMyDomain bool      `json:"is_my_domain" redis:"is_my_domain"`
 }
 
-type Parent struct {
-	Childlren []Child `json:"children"`
+type Event struct {
+	Id  string `json:"id" redis:"id"`
+	Log Log    `json:"log" redis:"log"`
 }
 
 func (s *Server) HelloWorldHandler(w http.ResponseWriter, r *http.Request) {
@@ -41,12 +46,41 @@ func (s *Server) HelloWorldHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) SendLogHandler(w http.ResponseWriter, r *http.Request) {
-	channel := "logs1"
-
-	_, err := s.r.HSet(r.Context(), channel, "child", "child1").Result()
-	if err != nil {
-		log.Fatalf("error setting child in redis. Err: %v", err)
+	channel := chi.URLParam(r, "channel")
+	if channel == "" {
+		w.Write([]byte("channel is required"))
 		return
+	}
+
+	var input struct {
+		Domain string `json:"domain"`
+	}
+
+	err := json.NewDecoder(r.Body).Decode(&input)
+	if err != nil {
+		log.Fatalf("error decoding JSON. Err: %v", err)
+		return
+	}
+
+	myDomain := "localhost"
+	event := Log{
+		Domain:     input.Domain,
+		RequestAt:  time.Now(),
+		IsMyDomain: input.Domain == myDomain,
+	}
+
+	jsonEvent, err := json.Marshal(event)
+	if err != nil {
+		log.Fatalf("error handling JSON marshal. Err: %v", err)
+		return
+	}
+
+	for i := 0; i < 100; i++ {
+		_, err = s.r.LPush(r.Context(), channel, jsonEvent).Result()
+		if err != nil {
+			log.Fatalf("error setting child in redis. Err: %v", err)
+			return
+		}
 	}
 
 	resp := make(map[string]string)
@@ -62,14 +96,35 @@ func (s *Server) SendLogHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) GetLogsHandler(w http.ResponseWriter, r *http.Request) {
-	channel := "logs1"
-	logs, err := s.r.HGetAll(r.Context(), channel).Result()
+	channel := chi.URLParam(r, "channel")
+	if channel == "" {
+		w.Write([]byte("channel is required"))
+		return
+	}
+
+	logs, err := s.r.LRange(r.Context(), channel, 0, -1).Result()
 	if err != nil {
 		log.Fatalf("error getting logs from redis. Err: %v", err)
 		return
 	}
 
-	jsonResp, err := json.Marshal(logs)
+	var logsS []Log
+	for _, log := range logs {
+		var logS Log
+		err := json.Unmarshal([]byte(log), &logS)
+		if err != nil {
+			fmt.Printf("error handling JSON unmarshal. Err: %v", err)
+			return
+		}
+
+		logsS = append(logsS, logS)
+	}
+
+	resp := make(map[string]any)
+	resp["len"] = len(logsS)
+	resp["logs"] = logsS
+
+	jsonResp, err := json.Marshal(resp)
 	if err != nil {
 		log.Fatalf("error handling JSON marshal. Err: %v", err)
 	}
