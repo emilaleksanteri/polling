@@ -1,6 +1,13 @@
 # Simple Makefile for a Go project
+#
 
-# Build the application
+.PHONY: help
+help:
+	@echo 'Usage: '
+	@sed -n 's/^##//p' ${MAKEFILE_LIST} | column -t -s ':' | sed -e 's/^/ /'
+
+
+## all: Build the application
 all: build
 
 build:
@@ -8,21 +15,21 @@ build:
 	
 	@go build -o main cmd/api/main.go
 
-# Run the application
+## run: Run the application
 run:
 	@go run cmd/api/main.go
 
-# Test the application
+## test: Test the application
 test:
 	@echo "Testing..."
 	@go test ./tests -v
 
-# Clean the binary
+## clean: Clean the binary
 clean:
 	@echo "Cleaning..."
 	@rm -f main
 
-# Live Reload
+## watch: Live Reload
 watch:
 	@if command -v air > /dev/null; then \
 	    air; \
