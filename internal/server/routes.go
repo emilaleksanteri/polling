@@ -14,6 +14,8 @@ func (s *Server) RegisterRoutes() http.Handler {
 	r.Use(middleware.Logger)
 
 	r.Get("/", s.HelloWorldHandler)
+	r.Post("/log", s.SendLogHandler)
+	r.Get("/logs", s.GetLogsHandler)
 
 	return r
 }
@@ -29,3 +31,7 @@ func (s *Server) HelloWorldHandler(w http.ResponseWriter, r *http.Request) {
 
 	_, _ = w.Write(jsonResp)
 }
+
+func (s *Server) SendLogHandler(w http.ResponseWriter, r *http.Request) {}
+
+func (s *Server) GetLogsHandler(w http.ResponseWriter, r *http.Request) {}

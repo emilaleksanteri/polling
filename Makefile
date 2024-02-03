@@ -46,4 +46,7 @@ watch:
 	    fi; \
 	fi
 
+compose-up:
+	@docker-compose up -d
+
 .PHONY: all build run test clean
