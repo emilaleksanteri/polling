@@ -25,7 +25,6 @@ func NewServer() *http.Server {
 		fmt.Printf(err.Error())
 		os.Exit(1)
 	}
-	defer redisClient.Close()
 
 	NewServer := &Server{
 		port: port,
